@@ -2,46 +2,17 @@
 - hosts: all
   become: true
   tasks:
-  - name: Install packages that allow apt to be used over HTTPS
-    apt:
-      name: "{{ packages }}"
-      state: present
-      update_cache: yes
-    vars:
-      packages:
-      - apt-transport-https
-      - ca-certificates
-      - curl
-      - gnupg-agent
-      - software-properties-common
+  - name: Stop firewall
+    systemd:
+      name: firewalld
+      state: stopped
 
-  - name: Add an apt signing key for Docker
-    apt_key:
-      url: https://download.docker.com/linux/ubuntu/gpg
-      state: present
+  - name: Disable firewall
+    systemd:
+      name: firewalld
+      enabled: false
 
-  - name: Add apt repository for stable version
-    apt_repository:
-      repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu xenial stable
-      state: present
-
-  - name: Install docker and its dependecies
-    apt: 
-      name: "{{ packages }}"
-      state: present
-      update_cache: yes
-    vars:
-      packages:
-      - docker-ce 
-      - docker-ce-cli 
-      - containerd.io
-    notify:
-      - docker status
-
-  - name: Add vagrant user to docker group
-    user:
-      name: vagrant
-      group: docker
+  - include: docker-install.yml
 
   - name: Remove swapfile from /etc/fstab
     mount:
@@ -56,27 +27,50 @@
     command: swapoff -a
     when: ansible_swaptotal_mb > 0
 
-  - name: Add an apt signing key for Kubernetes
-    apt_key:
-      url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
-      state: present
+  - name: Add Kubernetes repository
+    yum_repository:
+      name: kubernetes
+      description: kubernetes
+      baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+      enabled: yes
+      gpgcheck: yes
+      repo_gpgcheck: yes
+      gpgkey: https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
 
-  - name: Adding apt repository for Kubernetes
-    apt_repository:
-      repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
-      state: present
-      filename: kubernetes.list
+  - name: Disable SELinux
+    selinux:
+      state: disabled
 
-  - name: Install Kubernetes binaries
-    apt: 
+  - name: Disable SELinux permanently
+    lineinfile:
+      path: /etc/selinux/config
+      regexp: '^SELINUX='
+      line: SELINUX=disabled
+
+  - name: Install kubelet, kubeadm and kubectl 
+    yum:
       name: "{{ packages }}"
-      state: present
-      update_cache: yes
+      disable_excludes: kubernetes
     vars:
       packages:
-        - kubelet 
-        - kubeadm 
+        - kubelet
+        - kubeadm
         - kubectl
+  
+  - name: Load br_netfilter module
+    modprobe:
+      name: br_netfilter
+      state: present
+
+  - name: Enable bridge-nf-call-iptables
+    sysctl:
+      name: "{{ item }}"
+      value: '1'
+      state: present
+      reload: yes
+    with_items:
+      - net.bridge.bridge-nf-call-ip6tables
+      - net.bridge.bridge-nf-call-iptables
 
   - name: Configure node ip
     lineinfile:
@@ -89,10 +83,7 @@
       name: kubelet
       daemon_reload: yes
       state: restarted
+      enabled: true 
 
   - name: Join the node to cluster
     command: sh /vagrant/kubernetes-setup/join-command
-
-  handlers:
-    - name: docker status
-      service: name=docker state=started
