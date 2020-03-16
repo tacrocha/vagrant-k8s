@@ -1,4 +1,4 @@
-IMAGE_NAME = "bento/ubuntu-19.04"
+IMAGE_NAME = "bento/centos-7.7"
 N = 1
 
 Vagrant.configure("2") do |config|

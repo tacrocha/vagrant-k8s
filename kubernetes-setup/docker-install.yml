@@ -1,0 +1,48 @@
+---
+- name: Install required packages
+  yum: 
+    name: "{{ packages }}"
+  vars:
+    packages:
+      - yum-utils
+      - device-mapper-persistent-data
+      - lvm2
+
+- name: Add Docker repository
+  command: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+
+- name: Update packages
+  command: yum -y update
+  args:
+    warn: false
+
+- name: Install required packages
+  yum: 
+    name: "{{ packages }}"
+  vars:
+    packages:
+      - containerd.io-1.2.10
+      - docker-ce-19.03.4
+      - docker-ce-cli-19.03.4
+
+- name: Create /etc/docker directory
+  file:
+    path: /etc/docker
+    state: directory
+
+- name: Setup daemon
+  copy:
+    src: daemon.json
+    dest: /etc/docker/daemon.json
+
+- name: Restart Docker
+  systemd:
+    name: docker
+    state: restarted
+    enabled: yes
+    daemon_reload: yes
+
+- name: Add vagrant user to docker group
+  user:
+    name: vagrant
+    group: docker
