@@ -74,7 +74,7 @@
 
   - name: Configure node ip
     lineinfile:
-      path: /etc/default/kubelet
+      path: /etc/sysconfig/kubelet
       line: KUBELET_EXTRA_ARGS=--node-ip={{ node_ip }}
       create: yes
 
@@ -108,3 +108,15 @@
     copy:
      content: "{{ join_command.stdout_lines[0] }}"
      dest: "/vagrant/kubernetes-setup/join-command"
+
+  - name: Download Docker Compose
+    command: curl -L "https://github.com/docker/compose/releases/download/1.25.4/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+
+  - name: Apply executable permissions to Docker Compose binary
+    command: chmod +x /usr/local/bin/docker-compose
+
+  - name: Download Kompose
+    command: curl -L https://github.com/kubernetes/kompose/releases/download/v1.19.0/kompose-linux-amd64 -o /usr/local/bin/kompose
+
+  - name: Apply executable permissions to Kompose binary
+    command: chmod +x /usr/local/bin/kompose
